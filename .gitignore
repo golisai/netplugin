@@ -25,6 +25,7 @@ _testmain.go
 
 #ide files
 *.swp
+*~
 
 # vagrant
 .vagrant
