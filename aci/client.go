@@ -92,6 +92,10 @@ func (c *Client) Post(url string, v interface{}) error {
 	return err
 }
 
+func (c *Client) Write(mo model.Mo) error {
+	return c.Post(c.URL + "/testapi/mo/" + string(mo.GetDn()) + ".xml", mo)
+}
+
 
 func parseResponse(resp *http.Response, v interface{}) (count uint32, err error) {
 	className, err := model.MoClass(v)
@@ -99,8 +103,6 @@ func parseResponse(resp *http.Response, v interface{}) (count uint32, err error)
 		return 
 	}
 
-	//fmt.Println(string(body))
-	
 	// Decode the response, skipping the imdata tag
 	decoder := xml.NewDecoder(resp.Body)
 	var t xml.Token

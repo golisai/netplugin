@@ -21,7 +21,7 @@ import (
 )
 
 type Tenant struct {
-	model.Mo
+	model.BaseMo
 	Name string `xml:"name,attr,omitempty"`
 	XMLName xml.Name `xml:"fvTenant"`
 	Descr string `xml:"desc,attr,omitempty"`

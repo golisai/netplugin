@@ -21,7 +21,7 @@ import (
 )
 
 type User struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"aaaUser"`
 	Name string `xml:"name,attr,omitempty"`
 	Pwd string  `xml:"pwd,attr,omitempty"`

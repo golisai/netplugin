@@ -60,8 +60,7 @@ func TestClassQuery(t *testing.T) {
 
 func TestVmmModel(t *testing.T) {
 		model := `
-<compProv name="Microsoft">
-  <compCtrlr name="contiv" domName="test">
+  <compCtrlr dn="comp/prov-Microsoft/ctrlr-[test]-contiv" name="contiv" domName="test">
     <compHv name="hv" oid="hv" type="hv">
       <compHpNic name="pnic1" oid="pnic1"/>
     </compHv>
@@ -72,12 +71,11 @@ func TestVmmModel(t *testing.T) {
        </compVNic>
     </compVm>
   </compCtrlr>
-</compProv>
 `
-	var prov comp.Prov
-	xml.Unmarshal([]byte(model), &prov)
+	var ctrlr comp.Ctrlr
+	xml.Unmarshal([]byte(model), &ctrlr)
 
-	if err := client.Post(client.URL + "/testapi/mo/comp/prov-Microsoft.xml", &prov); err != nil {
+	if err := client.Write(&ctrlr); err != nil {
 		t.Fatal(err)
 	}
 	

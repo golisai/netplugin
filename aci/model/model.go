@@ -20,13 +20,23 @@ import (
 	"reflect"
 	//"time"
 )
+type Dn string
+
+type Mo interface {
+	GetDn() Dn
+}
+
 
 // Mo is the base struct for all the model structs
 // All MO structs should embed this struct
-type Mo struct {
-	Dn string `xml:"dn,attr,omitempty"`
+type BaseMo struct {
+	Dn Dn `xml:"dn,attr,omitempty"`
 	Status string `xml:"status,attr,omitempty"`
 	//ModTs time.Time `xml:"modTs,attr,omitempty"`
+}
+
+func (m *BaseMo) GetDn() Dn {
+	return m.Dn
 }
 
 

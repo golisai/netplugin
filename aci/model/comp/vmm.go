@@ -21,7 +21,7 @@ import (
 )
 
 type Prov struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compProv"`
 	Name string `xml:"name,attr,omitempty"`
 	Vendor string  `xml:"pwd,domName,omitempty"`
@@ -29,14 +29,36 @@ type Prov struct {
 	Doms []*Dom `xml:"compDom"`
 }
 
+func ProvDn(name string) model.Dn {
+	return model.Dn("comp/prov-" + name)
+}
+
+func NewProv(name string) *Prov {
+	return &Prov{
+		BaseMo: model.BaseMo{Dn: ProvDn(name)},
+		Name: name,
+	}
+}
+
 type Dom struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compDom"`
 	Name string `xml:"name,attr,omitempty"`
 }
 
+func DomDn(provName, domName string) model.Dn {
+	return model.Dn(string(ProvDn(provName)) + "/dom-" + domName)
+}
+
+func NewDom(provName, domName string) *Dom {
+	return &Dom{
+		BaseMo: model.BaseMo{Dn: DomDn(provName, domName)},
+		Name: domName,
+	}
+}
+
 type Ctrlr struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compCtrlr"`
 	Name string `xml:"name,attr,omitempty"`
 	DomName string  `xml:"domName,attr,omitempty"`
@@ -44,8 +66,41 @@ type Ctrlr struct {
 	Vms []*Vm `xml:"compVm"`
 }
 
+func CtrlrDn(provName, domName, ctrlrName string) model.Dn {
+	return model.Dn(string(ProvDn(provName)) + "/ctrlr-[" + domName + "]-" + ctrlrName)
+}
+
+func NewCtrlr(provName, domName, ctrlrName string) *Ctrlr {
+	return &Ctrlr{
+		BaseMo: model.BaseMo{Dn: CtrlrDn(provName, domName, ctrlrName)},
+		Name: ctrlrName,
+		DomName: domName,
+	}
+}
+
+func (c *Ctrlr) AddHv(oid string) *Hv {
+	hv := &Hv{
+		BaseMo: model.BaseMo{Dn:  model.Dn(string(c.Dn) + "/hv-" + oid)},
+		Oid: oid,
+		Name: oid,
+	}
+	c.Hvs = append(c.Hvs, hv)
+	return hv
+}
+
+func (c *Ctrlr) AddVm(hv *Hv, oid string) *Vm {
+	vm := &Vm{
+		BaseMo: model.BaseMo{Dn:  model.Dn(string(c.Dn) + "/vm-" + oid)},
+		RsHv: &RsHv{TDn: hv.Dn},
+		Oid: oid,
+		Name: oid,
+	}
+	c.Vms = append(c.Vms, vm)
+	return vm
+}
+
 type Hv struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compHv"`
 	Name string `xml:"name,attr,omitempty"`
 	Oid string `xml:"oid,attr,omitempty"`
@@ -53,15 +108,25 @@ type Hv struct {
 	HpNics []*HpNic `xml:"compHpNic"`
 }
 
+func (hv *Hv) AddHpNic(oid string) *HpNic {
+	nic := &HpNic {
+		BaseMo: model.BaseMo{Dn:  model.Dn(string(hv.Dn) + "/hpnic-" + oid)},
+		Oid: oid,
+		Name: oid,
+	}
+	hv.HpNics = append(hv.HpNics, nic)
+	return nic
+}
+
 type HpNic struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compHpNic"`
 	Name string `xml:"name,attr,omitempty"`
 	Oid string `xml:"oid,attr,omitempty"`
 }
 
 type Vm struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compVm"`
 	Name string `xml:"name,attr,omitempty"`
 	Oid string `xml:"oid,attr,omitempty"`
@@ -69,15 +134,24 @@ type Vm struct {
 	VNics []*VNic `xml:"compVNic"`
 }
 
+func (vm *Vm) AddVNic(mac string) *VNic {
+	nic := &VNic {
+		BaseMo: model.BaseMo{Dn:  model.Dn(string(vm.Dn) + "/vnic-" + mac)},
+		Mac: mac,
+	}
+	vm.VNics = append(vm.VNics, nic)
+	return nic
+}
+
 type RsHv struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compRsHv"`
 	Name string `xml:"name,attr,omitempty"`
-	TDn string `xml:"tDn,attr,omitempty"`
+	TDn model.Dn `xml:"tDn,attr,omitempty"`
 }
 
 type VNic struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compVNic"`
 	Name string `xml:"name,attr,omitempty"`
 	Oid string `xml:"oid,attr,omitempty"`
@@ -87,8 +161,18 @@ type VNic struct {
 	Ips []*Ip `xml:"compIp"`
 }
 
+
+func (nic *VNic) AddIp(addr string) *Ip {
+	ip := &Ip {
+		BaseMo: model.BaseMo{Dn:  model.Dn(string(nic.Dn) + "/ip-" + addr)},
+		Addr: addr,
+	}
+	nic.Ips = append(nic.Ips, ip)
+	return ip
+}
+
 type Ip struct {
-	model.Mo
+	model.BaseMo
 	XMLName xml.Name `xml:"compIp"`
 	Addr string `xml:"addr,attr,omitempty"`
 }
