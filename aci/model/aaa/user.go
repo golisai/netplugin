@@ -23,7 +23,7 @@ import (
 type User struct {
 	model.Mo
 	XMLName xml.Name `xml:"aaaUser"`
-	Name string `xml:"name,attr"`
+	Name string `xml:"name,attr,omitempty"`
 	Pwd string  `xml:"pwd,attr,omitempty"`
 	AccountStatus string  `xml:"accountStatus,attr,omitempty"`
 	FirstName string  `xml:"firstName,attr,omitempty"`

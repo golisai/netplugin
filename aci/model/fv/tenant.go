@@ -22,7 +22,7 @@ import (
 
 type Tenant struct {
 	model.Mo
+	Name string `xml:"name,attr,omitempty"`
 	XMLName xml.Name `xml:"fvTenant"`
-	Name string `xml:"name,attr"`
 	Descr string `xml:"desc,attr,omitempty"`
 }

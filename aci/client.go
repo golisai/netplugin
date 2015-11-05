@@ -17,18 +17,15 @@ package aci
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"github.com/contiv/netplugin/aci/model"
 	"github.com/contiv/netplugin/aci/model/aaa"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 )
-
-var _ = log.Print
 
 type MoNotFoundError struct {
 	Dn string
@@ -64,7 +61,12 @@ func NewClient(url string, user string, passwd string) (*Client, error) {
 		return nil, err
 	}
 
-	c := &Client{http.Client{Jar: jar}, url, user, passwd}
+	// Skip SSL cert validation
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	c := &Client{http.Client{Transport: tr, Jar: jar}, url, user, passwd}
 	err = c.Login()
 	return c, err
 }
@@ -85,45 +87,43 @@ func (c *Client) Post(url string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_, err = parseResponse(resp, v)
 
-
-	return nil
+	return err
 }
 
-// Query sends the rest query and unmarshals the response
-func (c *Client) query(url string, className string, v interface{}) (count uint32, err error) {
-	// Send the query string
-	resp, err := c.Client.Get(url)
+
+func parseResponse(resp *http.Response, v interface{}) (count uint32, err error) {
+	className, err := model.MoClass(v)
 	if err != nil {
-		return
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return
+		return 
 	}
 
+	//fmt.Println(string(body))
+	
 	// Decode the response, skipping the imdata tag
-	decoder := xml.NewDecoder(bytes.NewReader(body))
+	decoder := xml.NewDecoder(resp.Body)
 	var t xml.Token
 	for t, err = decoder.Token(); err == nil; t, err = decoder.Token() {
-		if elem, ok := t.(xml.StartElement); ok {
-			switch elem.Name.Local {
-			case "error":
-				var e RestError
-				if err = decoder.DecodeElement(&e, &elem); err == nil {
-					err = e
-				}	
-			case className:
-				if err = decoder.DecodeElement(v, &elem); err == nil {
-					count++
-				}
+		elem, ok := t.(xml.StartElement);
+		if !ok {
+			continue
+		}
+		
+		switch elem.Name.Local {
+		case "error":
+			var e RestError
+			if err = decoder.DecodeElement(&e, &elem); err == nil {
+				err = e
+			}	
+		case className:
+			if err = decoder.DecodeElement(v, &elem); err == nil {
+				count++
 			}
-
-			if err != nil {
-				break
-			}
+		}
+		
+		if err != nil {
+			break
 		}
 	}
 
@@ -134,27 +134,45 @@ func (c *Client) query(url string, className string, v interface{}) (count uint3
 	return
 }
 
+// query sends the rest query and unmarshals the response
+func (c *Client) query(url string, v interface{}, subtree bool) (count uint32, err error) {
+
+	if subtree {
+		if classes := model.RspSubtreeClasses(v); classes != "" {
+			url = url + "?rsp-subtree=full&rsp-subtree-class=" + classes
+		}
+	}
+
+	//fmt.Println(url)
+	
+	// Send the query string
+	resp, err := c.Client.Get(url)
+	if err != nil {
+		return
+	}
+	return parseResponse(resp, v)
+}
+
 // ClassQuery sends MO class query and unmarshals the response
-func (c *Client) ClassQuery(v interface{}) error {
+func (c *Client) ClassQuery(v interface{}, subtree bool) error {
 	className, err := model.MoClass(v)
 	if err != nil {
 		return err
 	}
-	url := c.URL + "/api/node/class/" + className + ".xml" 
-	_, err = c.query(url, className, v)
+
+	url := c.URL + "/api/node/class/" + className + ".xml"
+
+	_, err = c.query(url, v, subtree)
 	return err
 }
 
 // DnQuery sends the DN query and unmarshals the response
-func (c *Client) DnQuery(dn string, v interface{}) (error) {
-	className, err := model.MoClass(v)
-	if err != nil {
-		return err
-	}
+func (c *Client) DnQuery(dn string, v interface{},  subtree bool) (error) {
 	url := c.URL + "/api/node/mo/" + dn + ".xml"
-	count, err := c.query(url, className, v)
+	count, err := c.query(url, v, subtree)
 	if err == nil && count == 0 {
 		err = MoNotFoundError{dn}
 	}
 	return err
 }
+

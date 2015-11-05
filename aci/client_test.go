@@ -19,6 +19,7 @@ import (
 	"encoding/xml"
 	"flag"
 	"github.com/contiv/netplugin/aci/model/aaa"
+	"github.com/contiv/netplugin/aci/model/comp"
 	"github.com/contiv/netplugin/aci/model/fv"
 	"log"
 	"os"
@@ -29,7 +30,7 @@ var client *Client
 
 func TestDnQuery(t *testing.T) {
 	var user aaa.User
-	if err := client.DnQuery("uni/userext/user-" + client.User, &user); err != nil {
+	if err := client.DnQuery("uni/userext/user-" + client.User, &user, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,7 +43,7 @@ func TestDnQuery(t *testing.T) {
 
 func TestClassQuery(t *testing.T) {
 	var tenants []fv.Tenant
-	if err := client.ClassQuery(&tenants); err != nil {
+	if err := client.ClassQuery(&tenants, false); err != nil {
 		t.Fatal(err)
 	}
 	
@@ -55,6 +56,38 @@ func TestClassQuery(t *testing.T) {
 		
 		t.Errorf("Tenant class query returned only %v mos", len(tenants))
 	}
+}
+
+func TestVmmModel(t *testing.T) {
+		model := `
+<compProv name="Microsoft">
+  <compCtrlr name="contiv" domName="test">
+    <compHv name="hv" oid="hv" type="hv">
+      <compHpNic name="pnic1" oid="pnic1"/>
+    </compHv>
+    <compVm name="vm1" oid="vm1">
+       <compRsHv tDn="comp/prov-VMWare/ctrlr-[test]-contiv/hv-hv"/>
+       <compVNic name="vinc1" oid="vnic1" mac="AA:AA:AA:AA:AA:AA" operSt="up">
+          <compIp addr="1.1.1.1"/>
+       </compVNic>
+    </compVm>
+  </compCtrlr>
+</compProv>
+`
+	var prov comp.Prov
+	xml.Unmarshal([]byte(model), &prov)
+
+	if err := client.Post(client.URL + "/testapi/mo/comp/prov-Microsoft.xml", &prov); err != nil {
+		t.Fatal(err)
+	}
+	
+	var mos []comp.Ctrlr
+	if err := client.ClassQuery(&mos, true); err != nil {
+		t.Fatal(err)
+	}
+
+	data,_ := xml.Marshal(mos)
+	t.Log(string(data))
 }
 
 func TestMain(m *testing.M) {
