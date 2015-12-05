@@ -1,0 +1,10 @@
+[Unit]
+Description=Docker Swarm Manager
+After=docker.service
+
+[Service]
+EnvironmentFile=/etc/profile.d/env.sh
+ExecStart=/usr/bin/swarm manage -H tcp://$NODE_IP:2385 $SWARM_DISCOVERY
+
+[Install]
+WantedBy=multi-user.target

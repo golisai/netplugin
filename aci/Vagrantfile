@@ -1,0 +1,115 @@
+# e-*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.require_version ">= 1.7.1"
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "box-cutter/fedora22"
+
+  config.vm.synced_folder "../../../../..", "/go"
+  
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "1024"
+  end
+
+  num_nodes = 2
+  base_ip = "192.168.2."
+  node_ips = num_nodes.times.collect { |n| base_ip + "#{n+10}" }
+  node_names = num_nodes.times.collect { |n| "host#{n+1}" }
+  master_ip = node_ips[0]
+
+  num_nodes.times do |n|
+    config.vm.define node_names[n] do |node|
+      node_name = node_names[n]
+      node_ip = node_ips[n]
+      node.vm.hostname = node_name
+      node.vm.network :private_network, ip: node_ip, virtualbox__intnet: "true"
+      # node.vm.network :private_network, ip: "0.0.0.0"
+      node.vm.provider "virtualbox" do |v|
+        # make all nics 'virtio' to take benefit of builtin vlan tag
+        # support, which otherwise needs to be enabled in Intel drivers,
+        # which are used by default by virtualbox
+        v.customize ['modifyvm', :id, '--nictype1', 'virtio']
+        v.customize ['modifyvm', :id, '--nictype2', 'virtio']
+        v.customize ['modifyvm', :id, '--nictype3', 'virtio']
+        v.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+        v.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
+      end
+
+      # Install docker
+      node.vm.provision "shell",  run: "always", inline: <<-SHELL
+        echo 'export GOPATH=/go' >> /etc/profile.d/env.sh
+        echo 'export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin' > /etc/profile.d/env.sh
+        echo 'export GOPATH=/go' >> /etc/profile.d/env.sh
+        echo 'export NODE_NAME=#{node_name}' >> /etc/profile.d/env.sh
+        echo 'export NODE_IP=#{node_ip}' >> /etc/profile.d/env.sh
+        echo 'export MASTER_IP=#{master_ip}' >> /etc/profile.d/env.sh
+        echo 'export DOCKER_HOST=tcp://#{master_ip}:2385'  >> /etc/profile.d/env.sh
+        echo 'export SWARM_DISCOVERY=etcd://#{master_ip}:4001'  >> /etc/profile.d/env.sh
+        echo 'export http_proxy="proxy.esl.cisco.com:8080"' >> /etc/profile.d/env.sh
+        echo 'export https_proxy="proxy.esl.cisco.com:8080"' >> /etc/profile.d/env.sh
+        echo 'export no_proxy=127.0.0.1,#{node_ips.join(",")}' >>  /etc/profile.d/env.sh
+
+        source /etc/profile.d/env.sh
+
+        if [ ! -x /usr/bin/docker ]; then
+          curl -sSL https://get.docker.com/ | sh
+          usermod -aG docker vagrant
+          mkdir -p /run/docker/plugins
+        fi
+
+        mkdir -p /etc/systemd/system/docker.service.d
+        cp /vagrant/sys
+        if [ ! -x /usr/bin/go ]; then
+          echo "Installing go"
+          dnf install -y golang git
+          mkdir -p /go/src /go/bin
+          cd /vagrant
+          go get github.com/tools/godep swarm
+          godep get
+        fi
+
+        # Install swarm
+        cp /go/bin/swarm /usr/bin/swarm
+        fi      
+      SHELL
+
+      # Install etcd and go on master and start etcd
+      if n == 0
+        node.vm.provision "shell", inline: <<-SHELL
+          if [ ! -x /usr/bin/etcd ]; then
+            echo "Installing etcd"
+            ETCDV="2.2.1"
+            curl https://github.com/coreos/etcd/releases/download/v$ETCDV/etcd-v$ETCDV-linux-amd64.tar.gz \
+               -sSL -o etcd-v$ETCDV-linux-amd64.tar.gz
+            tar xzvf etcd-v$ETCDV-linux-amd64.tar.gz > /dev/null
+            mv etcd-v$ETCDV-linux-amd64/etcd /usr/bin/etcd
+            mv etcd-v$ETCDV-linux-amd64/etcdctl /usr/bin/etcdctl
+            rm -rf etcd-v$ETCDV-linux-amd64.tar.gz  etcd-v$ETCDV-linux-amd64
+          fi
+
+        SHELL
+
+        # start etcd on master
+        node.vm.provision "shell", run: "always", inline: <<-SHELL
+           nohup etcd --name #{node_name} --listen-client-urls http://0.0.0.0:4001\
+                --advertise-client-urls http://#{node_ip}:4001\
+                --data-dir /tmp/etcd &>/tmp/etcd.log &
+        SHELL
+      end
+
+      # Start docker and swarm agent
+      node.vm.provision "shell", run: "always", inline: <<-SHELL
+        systemctl start docker
+        nohup swarm join --advertise=#{node_ip}:2375 etcd://#{master_ip}:4001 &> /tmp/swarm-agent.log &
+      SHELL
+      
+      # Start swarm manager on master
+      if n == 0
+        node.vm.provision "shell", run: "always", inline: <<-SHELL
+           swarm manage -H tcp://#{node_ip}:2385 etcd://#{master_ip}:4001 &> /tmp/swarm-manager.log &
+        SHELL
+      end
+    end
+  end
+end

@@ -1,0 +1,12 @@
+[Unit]
+Description=ETCD Key Valuse Store
+After=network.target
+Before=docker.service
+
+[Service]
+EnvironmentFile=/etc/profile.d/env.sh
+Type=notify
+ExecStart=/usr/bin/etcd --name $NODE_NAME --listen-client-urls http://0.0.0.0:4001 --advertise-client-urls http://$NODE_IP:4001 --data-dir /tmp/etcd
+
+[Install]
+WantedBy=multi-user.target
